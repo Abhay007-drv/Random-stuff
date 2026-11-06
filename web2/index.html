@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DropFlow — Universal File Upload Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            ice:   { 50: '#f4f9fd', 100: '#eaf4fb', 200: '#d6e9f7', 300: '#b8d7ee' },
+            ocean: { 400: '#3d7fb8', 500: '#1f5f9e', 600: '#134a82', 700: '#0c3866', 800: '#082a4d', 900: '#051d38' },
+            mint:  { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669' }
+          },
+          boxShadow: {
+            soft: '0 10px 30px -12px rgba(12, 56, 102, 0.18)',
+            lift: '0 18px 40px -14px rgba(12, 56, 102, 0.28)'
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+
+    /* Drop zone states */
+    .dropzone { transition: all .3s ease; }
+    .dropzone.is-dragging {
+      border-color: #10b981;
+      background: #ecfdf5;
+      transform: scale(1.012);
+      box-shadow: 0 22px 50px -18px rgba(16, 185, 129, .45);
+    }
+    .dropzone.is-dragging .dz-icon { color: #10b981; background: #d1fae5; transform: translateY(-6px) scale(1.06); }
+    .dz-icon { transition: all .3s ease; }
+
+    /* Pulsing status dot */
+    @keyframes ping-soft { 0% { transform: scale(1); opacity: .7; } 80%,100% { transform: scale(2.4); opacity: 0; } }
+    .ping-soft { animation: ping-soft 1.8s cubic-bezier(0,0,.2,1) infinite; }
+
+    /* File card entrance */
+    @keyframes card-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+    .card-in { animation: card-in .35s ease both; }
+    @keyframes card-out { to { opacity: 0; transform: translateX(24px) scale(.97); height: 0; margin: 0; padding: 0; } }
+    .card-out { animation: card-out .28s ease forwards; overflow: hidden; }
+
+    /* Progress bar shimmer while uploading */
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .bar-active {
+      background-image: linear-gradient(90deg, #10b981 0%, #6ee7b7 50%, #10b981 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s linear infinite;
+    }
+
+    /* Complete badge pop */
+    @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
+    .pop { animation: pop .4s ease both; }
+
+    /* Soft background blobs */
+    .blob { position: absolute; border-radius: 9999px; filter: blur(70px); opacity: .55; pointer-events: none; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-ice-100 text-ocean-800 antialiased relative overflow-x-hidden">
+  <!-- Decorative background -->
+  <div class="blob w-72 h-72 bg-ice-300 -top-16 -left-16"></div>
+  <div class="blob w-80 h-80 bg-mint-100 top-1/3 -right-24"></div>
+
+  <!-- Header -->
+  <header class="relative z-10 bg-white/90 backdrop-blur border-b border-ice-200 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-ocean-600 flex items-center justify-center shadow-soft">
+          <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1" transform="rotate(180 12 12)" />
+          </svg>
+        </div>
+        <span class="text-xl font-bold tracking-tight text-ocean-700">Drop<span class="text-mint-500">Flow</span></span>
+      </div>
+
+      <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-mint-50 border border-mint-200 text-mint-600 text-sm font-semibold">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="ping-soft absolute inline-flex h-full w-full rounded-full bg-mint-400"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-mint-500"></span>
+        </span>
+        System Online
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-ocean-700">Upload anything, instantly</h1>
+      <p class="mt-2 text-ocean-500/80">Fast, secure and effortless file transfers.</p>
+    </div>
+
+    <!-- Drop zone -->
+    <section
+      id="dropzone"
+      class="dropzone bg-white border-2 border-dashed border-ocean-400/60 rounded-2xl shadow-soft px-6 py-12 sm:py-16 text-center cursor-pointer hover:border-ocean-500 hover:shadow-lift"
+      tabindex="0"
+      role="button"
+      aria-label="File drop zone. Press Enter to browse files."
+    >
+      <div class="dz-icon mx-auto w-20 h-20 rounded-2xl bg-ice-100 text-ocean-500 flex items-center justify-center">
+        <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V8m0 0l-3 3m3-3l3 3M7 18a4 4 0 01-.9-7.9 5.5 5.5 0 0110.7-1.1A4.5 4.5 0 0117.5 18H7z" />
+        </svg>
+      </div>
+      <h2 id="dz-title" class="mt-6 text-xl sm:text-2xl font-semibold text-ocean-700">Drag &amp; drop any file here</h2>
+      <p class="mt-2 text-sm sm:text-base text-ocean-500/80 max-w-md mx-auto">
+        Supports documents, images, code, media, and archives of any size.
+      </p>
+
+      <div class="mt-7 flex items-center justify-center gap-3">
+        <span class="h-px w-12 bg-ice-300"></span>
+        <span class="text-xs uppercase tracking-widest text-ocean-400">or</span>
+        <span class="h-px w-12 bg-ice-300"></span>
+      </div>
+
+      <button
+        id="browse-btn"
+        type="button"
+        class="mt-6 inline-flex items-center gap-2 px-7 py-3 rounded-2xl bg-ocean-600 text-white font-semibold shadow-soft transition-all duration-200 hover:bg-ocean-700 hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0 focus:outline-none focus-visible:ring-4 focus-visible:ring-mint-300"
+      >
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+        </svg>
+        Browse Files
+      </button>
+      <input id="file-input" type="file" multiple class="hidden" />
+    </section>
+
+    <!-- Queue panel -->
+    <section id="queue-panel" class="hidden mt-8 bg-white rounded-2xl shadow-soft border border-ice-200 overflow-hidden">
+      <div class="px-5 sm:px-6 py-4 border-b border-ice-200 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="font-semibold text-ocean-700">Upload Queue</h3>
+          <p id="queue-summary" class="text-sm text-ocean-500/80"></p>
+        </div>
+        <span id="overall-badge" class="hidden pop inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-mint-100 text-mint-600 text-xs font-semibold">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          All uploads complete
+        </span>
+      </div>
+
+      <!-- Overall progress -->
+      <div class="h-1.5 bg-ice-100">
+        <div id="overall-bar" class="h-full bg-mint-500 transition-all duration-300" style="width:0%"></div>
+      </div>
+
+      <ul id="file-list" class="p-4 sm:p-5 space-y-3"></ul>
+
+      <!-- Global action bar -->
+      <div class="px-5 sm:px-6 py-4 bg-ice-50 border-t border-ice-200 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+        <button id="clear-btn" type="button"
+          class="px-5 py-2.5 rounded-2xl bg-white border border-ice-300 text-ocean-600 font-semibold transition-all hover:bg-ice-100 hover:border-ocean-400 focus:outline-none focus-visible:ring-4 focus-visible:ring-ice-300">
+          Clear All
+        </button>
+        <button id="upload-btn" type="button"
+          class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl bg-ocean-600 text-white font-semibold shadow-soft transition-all hover:bg-ocean-700 hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus-visible:ring-4 focus-visible:ring-mint-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:bg-ocean-600">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span id="upload-btn-label">Upload All</span>
+        </button>
+      </div>
+    </section>
+
+    <p class="mt-10 text-center text-xs text-ocean-400">Demo only — files are never sent anywhere. Upload progress is simulated in your browser.</p>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const dropzone = $('dropzone'), fileInput = $('file-input'), browseBtn = $('browse-btn');
+      const panel = $('queue-panel'), list = $('file-list');
+      const summary = $('queue-summary'), overallBar = $('overall-bar'), overallBadge = $('overall-badge');
+      const clearBtn = $('clear-btn'), uploadBtn = $('upload-btn'), uploadLabel = $('upload-btn-label');
+      const dzTitle = $('dz-title');
+
+      /** @type {{id:string,name:string,size:number,type:string,progress:number,status:'queued'|'uploading'|'complete',timer:any}[]} */
+      let files = [];
+      let uid = 0;
+
+      /* ---------- Helpers ---------- */
+      const escapeHTML = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      function formatSize(bytes) {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        const v = bytes / Math.pow(1024, i);
+        return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+      }
+
+      const EXT = {
+        image: ['png','jpg','jpeg','gif','svg','webp','bmp','ico','avif','heic','tiff'],
+        document: ['pdf','doc','docx','txt','md','rtf','odt','xls','xlsx','csv','ppt','pptx','pages','key','numbers'],
+        code: ['js','ts','jsx','tsx','html','css','scss','json','xml','py','java','c','cpp','cs','go','rs','php','rb','sh','sql','yml','yaml','swift','kt'],
+        media: ['mp3','wav','flac','aac','ogg','mp4','mov','avi','mkv','webm','m4a'],
+        archive: ['zip','rar','7z','tar','gz','bz2','xz','iso','dmg']
+      };
+
+      function categorize(file) {
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (file.type.startsWith('image/') || EXT.image.includes(ext)) return 'image';
+        if (file.type.startsWith('video/') || file.type.startsWith('audio/') || EXT.media.includes(ext)) return 'media';
+        if (EXT.archive.includes(ext)) return 'archive';
+        if (EXT.code.includes(ext)) return 'code';
+        if (EXT.document.includes(ext) || file.type.startsWith('text/')) return 'document';
+        return 'file';
+      }
+
+      const ICONS = {
+        image:    '<path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.6-4.6a2 2 0 012.8 0L16 16m-2-2l1.6-1.6a2 2 0 012.8 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
+        document: '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.6a1 1 0 01.7.3l5.4 5.4a1 1 0 01.3.7V19a2 2 0 01-2 2z"/>',
+        code:     '<path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>',
+        media:    '<path stroke-linecap="round" stroke-linejoin="round" d="M14.7 12l-4.2 2.6a.5.5 0 01-.8-.4V9.8a.5.5 0 01.8-.4L14.7 12zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+        archive:  '<path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>',
+        file:     '<path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.4a1 1 0 00-.3-.7l-5.4-5.4a1 1 0 00-.7-.3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>'
+      };
+
+      const ICON_STYLE = {
+        image:    'bg-mint-50 text-mint-600',
+        document: 'bg-ice-100 text-ocean-500',
+        code:     'bg-ocean-600 text-white',
+        media:    'bg-mint-100 text-mint-600',
+        archive:  'bg-ice-200 text-ocean-700',
+        file:     'bg-ice-100 text-ocean-500'
+      };
+
+      /* ---------- Rendering ---------- */
+      function cardHTML(f) {
+        const cat = categorize(f);
+        const done = f.status === 'complete';
+        return `
+        <li data-id="${f.id}" class="card-in group flex items-center gap-4 p-4 rounded-2xl border border-ice-200 bg-white hover:border-ice-300 hover:shadow-soft transition-all duration-200">
+          <div class="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center ${ICON_STYLE[cat]}">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">${ICONS[cat]}</svg>
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-3">
+              <p class="truncate font-medium text-ocean-700" title="${escapeHTML(f.name)}">${escapeHTML(f.name)}</p>
+              <span data-role="badge">${badgeHTML(f)}</span>
+            </div>
+            <div class="mt-0.5 flex items-center justify-between text-xs text-ocean-500/80">
+              <span>${formatSize(f.size)}</span>
+              <span data-role="pct" class="font-semibold ${done ? 'text-mint-600' : 'text-ocean-500'}">${Math.round(f.progress)}%</span>
+            </div>
+            <div class="mt-2 h-2 rounded-full bg-ice-100 overflow-hidden">
+              <div data-role="bar" class="h-full rounded-full ${done ? 'bg-mint-500' : 'bar-active'} transition-[width] duration-200 ease-out" style="width:${f.progress}%"></div>
+            </div>
+          </div>
+
+          <button data-action="remove" type="button" aria-label="Remove ${escapeHTML(f.name)}"
+            class="shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-ocean-400 hover:text-ocean-700 hover:bg-ice-100 transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-ice-300">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.9 12a2 2 0 01-2 1.9H7.9a2 2 0 01-2-1.9L5 7m5 4v6m4-6v6M4 7h16M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>
+          </button>
+        </li>`;
+      }
+
+      function badgeHTML(f) {
+        if (f.status === 'complete') {
+          return `<span class="pop inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-mint-100 text-mint-600 text-xs font-semibold">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Complete</span>`;
+        }
+        if (f.status === 'uploading') {
+          return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-ice-100 text-ocean-500 text-xs font-semibold">Uploading…</span>`;
+        }
+        return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-ice-100 text-ocean-400 text-xs font-semibold">Queued</span>`;
+      }
+
+      function updateCard(f) {
+        const el = list.querySelector(`[data-id="${f.id}"]`);
+        if (!el) return;
+        const bar = el.querySelector('[data-role="bar"]');
+        const pct = el.querySelector('[data-role="pct"]');
+        const badge = el.querySelector('[data-role="badge"]');
+        bar.style.width = f.progress + '%';
+        pct.textContent = Math.round(f.progress) + '%';
+        if (f.status === 'complete') {
+          bar.classList.remove('bar-active'); bar.classList.add('bg-mint-500');
+          pct.classList.remove('text-ocean-500'); pct.classList.add('text-mint-600');
+        }
+        if (badge.dataset.state !== f.status) {
+          badge.dataset.state = f.status;
+          badge.innerHTML = badgeHTML(f);
+        }
+      }
+
+      function updateSummary() {
+        const total = files.length;
+        panel.classList.toggle('hidden', total === 0);
+        if (!total) return;
+
+        const complete = files.filter((f) => f.status === 'complete').length;
+        const uploading = files.filter((f) => f.status === 'uploading').length;
+        const queued = total - complete - uploading;
+        const totalSize = files.reduce((a, f) => a + f.size, 0);
+        const overall = files.reduce((a, f) => a + f.progress, 0) / total;
+
+        summary.textContent = `${total} file${total > 1 ? 's' : ''} · ${formatSize(totalSize)} · ${complete} complete`;
+        overallBar.style.width = overall + '%';
+        overallBadge.classList.toggle('hidden', complete !== total);
+
+        uploadBtn.disabled = queued === 0;
+        uploadLabel.textContent = uploading > 0 ? 'Uploading…' : (complete === total ? 'All Uploaded' : 'Upload All');
+      }
+
+      /* ---------- Upload simulation ---------- */
+      function startUpload(f) {
+        if (f.status !== 'queued') return;
+        f.status = 'uploading';
+        updateCard(f); updateSummary();
+
+        // Larger files take slightly longer, capped for a pleasant demo.
+        const sizeFactor = Math.min(Math.log10(Math.max(f.size, 1000)) / 8, 1);
+        const speed = 2.2 - sizeFactor; // 1.2 – 2.2 base step
+
+        f.timer = setInterval(() => {
+          f.progress = Math.min(100, f.progress + (Math.random() * 6 + 1.5) * speed);
+          if (f.progress >= 100) {
+            f.progress = 100;
+            f.status = 'complete';
+            clearInterval(f.timer);
+            f.timer = null;
+          }
+          updateCard(f); updateSummary();
+        }, 120);
+      }
+
+      /* ---------- Add / remove ---------- */
+      function addFiles(fileListLike) {
+        const incoming = Array.from(fileListLike || []);
+        if (!incoming.length) return;
+        const added = incoming.map((file) => ({
+          id: 'f' + (++uid), name: file.name, size: file.size, type: file.type,
+          progress: 0, status: 'queued', timer: null, _file: file
+        }));
+        files.push(...added);
+        list.insertAdjacentHTML('beforeend', added.map(cardHTML).join(''));
+        updateSummary();
+        // Instantly kick off simulated uploads, slightly staggered.
+        added.forEach((f, i) => setTimeout(() => startUpload(f), 150 + i * 120));
+      }
+
+      function removeFile(id) {
+        const idx = files.findIndex((f) => f.id === id);
+        if (idx === -1) return;
+        clearInterval(files[idx].timer);
+        files.splice(idx, 1);
+        const el = list.querySelector(`[data-id="${id}"]`);
+        if (el) {
+          el.classList.remove('card-in'); el.classList.add('card-out');
+          setTimeout(() => { el.remove(); updateSummary(); }, 260);
+        }
+        updateSummary();
+      }
+
+      function clearAll() {
+        files.forEach((f) => clearInterval(f.timer));
+        files = [];
+        list.innerHTML = '';
+        updateSummary();
+      }
+
+      /* ---------- Events ---------- */
+      browseBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+      dropzone.addEventListener('click', () => fileInput.click());
+      dropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+      });
+      fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+      // Drag & drop with a counter so nested elements don't flicker the state.
+      let dragDepth = 0;
+      const setDragging = (on) => {
+        dropzone.classList.toggle('is-dragging', on);
+        dzTitle.textContent = on ? 'Release to upload' : 'Drag & drop any file here';
+      };
+      dropzone.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; setDragging(true); });
+      dropzone.addEventListener('dragover',  (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+      dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); if (--dragDepth <= 0) { dragDepth = 0; setDragging(false); } });
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault(); dragDepth = 0; setDragging(false);
+        addFiles(e.dataTransfer.files);
+      });
+
+      // Stop the browser from opening files dropped outside the zone.
+      ['dragover', 'drop'].forEach((evt) => window.addEventListener(evt, (e) => e.preventDefault()));
+
+      list.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="remove"]');
+        if (btn) removeFile(btn.closest('li').dataset.id);
+      });
+      clearBtn.addEventListener('click', clearAll);
+      uploadBtn.addEventListener('click', () => files.filter((f) => f.status === 'queued').forEach(startUpload));
+    })();
+  </script>
+</body>
+</html>

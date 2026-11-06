@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Upload</title>
+<style>
+  :root {
+    --blue-dark: #0d47a1;
+    --blue: #1976d2;
+    --blue-light: #e3f2fd;
+    --green: #2e9e5b;
+    --green-light: #e8f5e9;
+    --white: #ffffff;
+    --text: #17324d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: linear-gradient(135deg, var(--blue-light), var(--green-light));
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--text);
+  }
+  .card {
+    background: var(--white);
+    width: 100%;
+    max-width: 520px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(13, 71, 161, 0.15);
+    overflow: hidden;
+  }
+  .card-header {
+    background: linear-gradient(90deg, var(--blue-dark), var(--blue));
+    color: var(--white);
+    padding: 22px 28px;
+  }
+  .card-header h1 { font-size: 1.4rem; }
+  .card-header p { font-size: 0.9rem; opacity: 0.85; margin-top: 4px; }
+  .card-body { padding: 28px; }
+  .drop-zone {
+    border: 2px dashed var(--blue);
+    background: var(--blue-light);
+    border-radius: 12px;
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--green);
+    background: var(--green-light);
+  }
+  .drop-zone .icon { font-size: 2.6rem; }
+  .drop-zone p { margin-top: 8px; }
+  .drop-zone span { color: var(--blue); font-weight: 600; text-decoration: underline; }
+  input[type="file"] { display: none; }
+  ul { list-style: none; margin-top: 20px; }
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: var(--white);
+    border: 1px solid #d5e3f3;
+    border-left: 4px solid var(--green);
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  .file-info { overflow: hidden; }
+  .file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-size { font-size: 0.78rem; color: #5b7690; }
+  .remove {
+    background: none; border: none; color: var(--blue-dark);
+    font-size: 1.2rem; cursor: pointer; line-height: 1;
+  }
+  .remove:hover { color: #c62828; }
+  .progress { height: 8px; background: var(--blue-light); border-radius: 99px; margin-top: 18px; overflow: hidden; display: none; }
+  .progress-bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width 0.2s; }
+  .btn {
+    display: block; width: 100%; margin-top: 20px; padding: 13px;
+    background: var(--green); color: var(--white);
+    border: none; border-radius: 10px;
+    font-size: 1rem; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn:hover:not(:disabled) { background: #238148; }
+  .btn:disabled { background: #b7c9d9; cursor: not-allowed; }
+  .message { margin-top: 14px; text-align: center; font-weight: 600; color: var(--green); min-height: 1.2em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-header">
+      <h1>Upload Files</h1>
+      <p>Any file type is welcome</p>
+    </div>
+    <div class="card-body">
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">📁</div>
+        <p>Drag &amp; drop files here, or <span>browse</span></p>
+      </div>
+      <input type="file" id="fileInput" multiple>
+
+      <ul id="fileList"></ul>
+
+      <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <button class="btn" id="uploadBtn" disabled>Upload</button>
+      <div class="message" id="message"></div>
+    </div>
+  </div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const fileList = document.getElementById('fileList');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const progress = document.getElementById('progress');
+  const progressBar = document.getElementById('progressBar');
+  const message = document.getElementById('message');
+
+  let files = [];
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+  ['dragenter', 'dragover'].forEach(evt =>
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); }));
+  ['dragleave', 'drop'].forEach(evt =>
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('dragover'); }));
+  dropZone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+
+  function addFiles(newFiles) {
+    files = files.concat(Array.from(newFiles));
+    message.textContent = '';
+    render();
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  function render() {
+    fileList.innerHTML = '';
+    files.forEach((file, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="file-info">
+          <div class="file-name"></div>
+          <div class="file-size">${formatSize(file.size)}</div>
+        </div>
+        <button class="remove" title="Remove">&times;</button>`;
+      li.querySelector('.file-name').textContent = file.name;
+      li.querySelector('.remove').addEventListener('click', () => {
+        files.splice(i, 1);
+        render();
+      });
+      fileList.appendChild(li);
+    });
+    uploadBtn.disabled = files.length === 0;
+  }
+
+  uploadBtn.addEventListener('click', () => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+
+    progress.style.display = 'block';
+    uploadBtn.disabled = true;
+    message.textContent = '';
+
+    const xhr = new XMLHttpRequest();
+    // Change this URL to your server's upload endpoint
+    xhr.open('POST', '/upload');
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) progressBar.style.width = (e.loaded / e.total * 100) + '%';
+    });
+    xhr.onload = () => finish(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => finish(false);
+    xhr.send(formData);
+  });
+
+  function finish(ok) {
+    progressBar.style.width = ok ? '100%' : '0';
+    message.style.color = ok ? 'var(--green)' : '#c62828';
+    message.textContent = ok ? '✔ Upload complete!' : 'Upload failed. Is the server endpoint set up?';
+    if (ok) { files = []; render(); }
+    else uploadBtn.disabled = files.length === 0;
+  }
+</script>
+</body>
+</html>
