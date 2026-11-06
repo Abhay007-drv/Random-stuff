@@ -6,6 +6,8 @@
   --green-light: #e8f5e9;
   --white: #ffffff;
   --text: #17324d;
+  --amber: #f29900;
+  --amber-light: #fff4e0;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -75,9 +77,58 @@ li {
   border-radius: 8px;
   font-size: 0.9rem;
 }
-.file-info { overflow: hidden; }
+.file-info { overflow: hidden; flex: 1; min-width: 0; }
 .file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .file-size { font-size: 0.78rem; color: #5b7690; }
+
+/* ---- per-file status ---- */
+.file-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.status.queued    { background: #eceff1; color: #546e7a; }
+.status.uploading { background: var(--blue-light); color: var(--blue-dark); }
+.status.detected  { background: var(--amber-light); color: #a86400; }
+.status.preparing { background: var(--amber-light); color: #a86400; }
+.status.done      { background: var(--green-light); color: var(--green); }
+.status.error     { background: #fdecea; color: #c62828; }
+
+.status.uploading::before,
+.status.preparing::before {
+  content: "";
+  display: inline-block;
+  width: 8px; height: 8px;
+  margin-right: 6px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -1px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.file-cost { font-weight: 700; color: var(--green); min-width: 52px; text-align: right; }
+
+.file-bar {
+  height: 4px;
+  background: var(--blue-light);
+  border-radius: 99px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.file-bar > div {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  transition: width 0.2s;
+}
 
 .remove {
   background: none;
@@ -104,6 +155,20 @@ li {
   transition: width 0.2s;
 }
 
+/* ---- cost summary ---- */
+.summary {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--green-light);
+  border: 1px solid #c8e6c9;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+.summary strong { font-size: 1.3rem; color: var(--green); }
+
 .btn {
   display: block;
   width: 100%;
@@ -120,6 +185,9 @@ li {
 }
 .btn:hover:not(:disabled) { background: #238148; }
 .btn:disabled { background: #b7c9d9; cursor: not-allowed; }
+
+.btn-next { display: none; background: var(--blue); }
+.btn-next:hover:not(:disabled) { background: var(--blue-dark); }
 
 .message {
   margin-top: 14px;
